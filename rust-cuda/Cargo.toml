@@ -1,0 +1,32 @@
+[package]
+name = "rust-cuda"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "rust_cuda"
+crate-type = ["cdylib","rlib"]
+
+[dependencies]
+pyo3 = { version = "0.25.0", features = ["extension-module"]} 
+
+#SciRS2 ecosystem 
+scirs2-core = {version = "0.1.0-alpha.4", features = ["gpu"]}
+scirs2-linalg = "0.1.0-alpha.4"
+scirs2-neural = "0.1.0-alpha.4"
+
+matrixmultiply = { version = "0.3", default-features = false } 
+
+ndarray = { version = "0.16", features = ["blas"] }
+ndarray-linalg = { version = "0.16", features = ["openblas-system"] }
+
+anyhow = "1.0"
+tokio = {version = "1.0", features = ["full"]}
+
+cudarc = {version = "0.12", optional = true}
+
+[features]
+default = ["pyo3/extension-module"]
+#extensions-module = ["pyo3/extension-module"]
+backup-cuda = ["cudarc"]
+
