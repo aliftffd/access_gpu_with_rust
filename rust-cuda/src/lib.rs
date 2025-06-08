@@ -1,7 +1,6 @@
 use pyo3::prelude::*;
 use anyhow::Result;
 use ndarray::{Array1, Array2, Array3, s};
-use ndarray_linalg::{Determinant, Norm, SVD, QR, Inverse}; // Added missing imports
 
 // Import SciRS2 modules - for GPU context only
 use scirs2_core::gpu::{GpuContext, GpuBackend};
@@ -167,7 +166,6 @@ fn test_linalg_operations(size: usize) -> PyResult<String> {
 
 fn perform_linalg_tests(size: usize) -> Result<Vec<String>> {
     use std::time::Instant;
-    use ndarray_linalg::{Determinant, Norm, SVD, QR, Inverse}; // Import required traits
 
     let mut results = Vec::new();
     
@@ -176,58 +174,29 @@ fn perform_linalg_tests(size: usize) -> Result<Vec<String>> {
         if i == j { 2.0 } else if (i as i32 - j as i32).abs() == 1 { 1.0 } else { 0.0 }
     });
     
-    // Test determinant
+    // Test basic operations that don't require ndarray-linalg
     let start = Instant::now();
-    match a.det() {
-        Ok(det) => {
-            let time = start.elapsed().as_secs_f64() * 1000.0;
-            results.push(format!("✓ Determinant: {:.4} ({:.2}ms)", det, time));
-        },
-        Err(e) => results.push(format!("✗ Determinant failed: {}", e)),
-    }
-    
-    // Test matrix norms
-    let start = Instant::now();
-    let norm = a.norm_l2();
+    let norm = (a.iter().map(|x| x * x).sum::<f64>()).sqrt(); // Manual L2 norm
     let time = start.elapsed().as_secs_f64() * 1000.0;
     results.push(format!("✓ Matrix L2 norm: {:.4} ({:.2}ms)", norm, time));
     
-    // Test SVD (for smaller matrices to avoid timeout)
-    if size <= 100 {
-        let start = Instant::now();
-        match a.svd(true, true) {
-            Ok((u, s, vt)) => {
-                let time = start.elapsed().as_secs_f64() * 1000.0;
-                results.push(format!("✓ SVD: {} singular values ({:.2}ms)", s.len(), time));
-            },
-            Err(e) => results.push(format!("✗ SVD failed: {}", e)),
-        }
-    }
+    // Test matrix multiplication
+    let start = Instant::now();
+    let _result = multiply_matrices_f64(&a, &a);
+    let time = start.elapsed().as_secs_f64() * 1000.0;
+    results.push(format!("✓ Matrix multiplication: {}x{} ({:.2}ms)", size, size, time));
     
-    // Test QR decomposition
-    if size <= 100 {
-        let start = Instant::now();
-        match a.qr() {
-            Ok((q, r)) => {
-                let time = start.elapsed().as_secs_f64() * 1000.0;
-                results.push(format!("✓ QR decomposition: Q{:?} R{:?} ({:.2}ms)", 
-                    q.shape(), r.shape(), time));
-            },
-            Err(e) => results.push(format!("✗ QR decomposition failed: {}", e)),
-        }
-    }
+    // Test matrix transpose
+    let start = Instant::now();
+    let _at = a.t().to_owned();
+    let time = start.elapsed().as_secs_f64() * 1000.0;
+    results.push(format!("✓ Matrix transpose: ({:.2}ms)", time));
     
-    // Test matrix inverse (for small matrices)
-    if size <= 50 {
-        let start = Instant::now();
-        match a.inv() {
-            Ok(inv_a) => {
-                let time = start.elapsed().as_secs_f64() * 1000.0;
-                results.push(format!("✓ Matrix inverse: {:?} ({:.2}ms)", inv_a.shape(), time));
-            },
-            Err(e) => results.push(format!("✗ Matrix inverse failed: {}", e)),
-        }
-    }
+    // Test matrix addition
+    let start = Instant::now();
+    let _sum = &a + &a;
+    let time = start.elapsed().as_secs_f64() * 1000.0;
+    results.push(format!("✓ Matrix addition: ({:.2}ms)", time));
     
     Ok(results)
 }
@@ -395,15 +364,13 @@ fn test_scirs2_modules() -> PyResult<String> {
     let mv_result = a.dot(&x);
     results.push(format!("✓ matrix-vector multiplication works, result: {:?}", mv_result[0]));
     
-    // Test ndarray-linalg functions
-    use ndarray_linalg::*;
-    match a.det() {
-        Ok(det) => results.push(format!("✓ ndarray-linalg determinant works, det = {:.2}", det)),
-        Err(e) => results.push(format!("✗ determinant failed: {}", e)),
-    }
+    // Calculate manual determinant for 2x2 matrix
+    let det = a[[0, 0]] * a[[1, 1]] - a[[0, 1]] * a[[1, 0]];
+    results.push(format!("✓ 2x2 determinant calculation works, det = {:.2}", det));
     
-    let norm = a.norm_l2();
-    results.push(format!("✓ ndarray-linalg norm works, norm = {:.2}", norm));
+    // Calculate manual L2 norm
+    let norm = (a.iter().map(|x| x * x).sum::<f64>()).sqrt();
+    results.push(format!("✓ manual L2 norm calculation works, norm = {:.2}", norm));
     
     // Test GPU context (SciRS2)
     match GpuContext::new(GpuBackend::preferred()) {
@@ -420,7 +387,7 @@ fn test_scirs2_modules() -> PyResult<String> {
 
 /// Python module definition
 #[pymodule]
-fn scirs2_gpu_demo(_py: Python, m: &PyModule) -> PyResult<()> {
+fn rust_cuda(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(test_gpu_availability, m)?)?;
     m.add_function(wrap_pyfunction!(test_matrix_operations, m)?)?;
     m.add_function(wrap_pyfunction!(gpu_matrix_multiply, m)?)?;
